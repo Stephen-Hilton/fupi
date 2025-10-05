@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fupi"
-version = "0.2"
+version = "1.0"
 description = "A brute-force shortcut to fix python import hell. Acronym, standing for, um, Fix Up Python Imports. Sure, let's go with that."
 authors = [{ name="Stephen Hilton", email="stephen@familyhilton.com" }]
 readme = "README.md"
@@ -12,7 +12,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 keywords = ["python","imports","import","hell"]
-dependencies = ['listofdicts']
+dependencies = []
 
 [tool.setuptools]
 package-dir = { "" = "src" }

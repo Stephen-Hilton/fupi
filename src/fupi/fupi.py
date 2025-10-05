@@ -1,20 +1,20 @@
 from pathlib import Path
-from listofdicts import listofdicts
 import sys, os, re 
 
 # capture initial state:
-sys_path_history:listofdicts = listofdicts([],
-                                           metadata= {
-                                                'autostarted':True, 
-                                                'required_envar_keys': ['FUPI_ADD_DIRS'],
-                                                'all_envar_keys': ['FUPI_ADD_DIRS', 'FUPI_SKIP_DIRS'],
-                                                'envars_retrieved_from':None,
-                                                'FUPI_ADD_DIRS':[], 
-                                                'FUPI_SKIP_DIRS':[],
-                                                'FUPI_ADD_DIRS default':  ['src', 'test'], 
-                                                'FUPI_SKIP_DIRS default': ['setup', 'venv*', '*egg*']
-                                                })
-sys_path_history.append( {f'sys.path set {len(sys_path_history)}': sys.path.copy()} )
+sys_path_history = {
+    'history': [{f'sys.path set 0': sys.path.copy()}],
+    'metadata': {
+        'autostarted': True, 
+        'required_envar_keys': ['FUPI_ADD_DIRS'],
+        'all_envar_keys': ['FUPI_ADD_DIRS', 'FUPI_SKIP_DIRS'],
+        'envars_retrieved_from': None,
+        'FUPI_ADD_DIRS': [], 
+        'FUPI_SKIP_DIRS': [],
+        'FUPI_ADD_DIRS default': ['src', 'test'], 
+        'FUPI_SKIP_DIRS default': ['setup', 'venv*', '*egg*', 'old*', '*old', '*bkup', '*backup']
+    }
+}
 quotes = ['"',"'"]
 
 
@@ -103,26 +103,30 @@ def load_dirnames_from_env(dotenv_filepath:Path = './.env') -> tuple[list,list]:
         lines = {l.split('=')[0].replace('"',''):l.split('=')[1] for l in lines if '=' in l}
         lines = {n:v[1:-1] if v[:1] in quotes or v[-1:] in quotes else v for n,v in lines.items()}
 
-        if [l for l in lines.keys() if l in sys_path_history.metadata['required_envar_keys']]:
+        if [l for l in lines.keys() if l in sys_path_history['metadata']['required_envar_keys']]:
             break # this one will work!
 
         # if the file is missing FUPI_ADD_DIRS, discard the file and try again:
-        found_dirs.pop(found_dirs.index(env_file))
+        if env_file in found_dirs:
+            found_dirs.remove(env_file)
+        else:
+            # Remove by matching path
+            found_dirs = [f for f in found_dirs if f.resolve() != env_file.resolve()]
 
     
     # report on selection made:
     if use_default: 
-        sys_path_history.metadata['envars_retrieved_from': 'default values']
-        for envar in sys_path_history.metadata['all_envar_keys']:
-            sys_path_history.metadata[envar: sys_path_history.metadata[f'{envar} default'] ]
+        sys_path_history['metadata']['envars_retrieved_from'] = 'default values'
+        for envar in sys_path_history['metadata']['all_envar_keys']:
+            sys_path_history['metadata'][envar] = sys_path_history['metadata'][f'{envar} default']
         
     else: # custom envars found:
-        sys_path_history.metadata['envars_retrieved_from'] = str(env_file)
-        lines = {n:v.split(',') for n,v in lines.items() if n in sys_path_history.metadata['all_envar_keys']}
+        sys_path_history['metadata']['envars_retrieved_from'] = str(env_file)
+        lines = {n:v.split(',') for n,v in lines.items() if n in sys_path_history['metadata']['all_envar_keys']}
         for envar in lines.keys():
-            sys_path_history.metadata[envar] = lines[envar]
+            sys_path_history['metadata'][envar] = lines[envar]
 
-    return sys_path_history.metadata[f'FUPI_ADD_DIRS'], sys_path_history.metadata['FUPI_SKIP_DIRS']
+    return sys_path_history['metadata']['FUPI_ADD_DIRS'], sys_path_history['metadata']['FUPI_SKIP_DIRS']
 
  
 
@@ -167,11 +171,11 @@ def add_dirs_and_children_to_syspath(add_dirs = None, skip_dirs = None) -> dict:
     if add_dirs:  
         add_dirs = list(add_dirs)
         skip_dirs = list(skip_dirs)
-        sys_path_history.metadata['envars_retrieved_from'] = 'function parameters'
+        sys_path_history['metadata']['envars_retrieved_from'] = 'function parameters'
     elif os.getenv('FUPI_ADD_DIRS'):  # look in envvars:
             add_dirs = list(os.getenv('FUPI_ADD_DIRS').split(','))
             skip_dirs = list(os.getenv('FUPI_SKIP_DIRS').split(', '))
-            sys_path_history.metadata['envars_retrieved_from'] = 'OS environment variables'
+            sys_path_history['metadata']['envars_retrieved_from'] = 'OS environment variables'
     else:  # pull from .env files, or get default
         add_dirs, skip_dirs = load_dirnames_from_env() # does its own reporting
             
@@ -179,13 +183,19 @@ def add_dirs_and_children_to_syspath(add_dirs = None, skip_dirs = None) -> dict:
 
     # make sure there are no residual quotes around anything:
     add_dirs = [d[1:-1] if d[:1] in quotes and d[-1:] in quotes else d for d in add_dirs]
+    
+    # Handle skip_dirs - ensure it's a proper list and split any comma-separated values
+    if skip_dirs and isinstance(skip_dirs[0], str) and ',' in skip_dirs[0]:
+        # If skip_dirs is a single comma-separated string, split it
+        skip_dirs = [d.strip() for d in skip_dirs[0].split(',')]
+    
     skip_dirs = [d[1:-1] if d[:1] in quotes and d[-1:] in quotes else d for d in skip_dirs]
-    skip_dirs.extend(['\.*'])  # always skip paths that begin with a period (e.g., `.git`)
-    skip_dirs.extend(['\_*'])  # always skip paths that begin with an underscore (e.g., `__pycache__`)
+    skip_dirs.extend([r'\.*'])  # always skip paths that begin with a period (e.g., `.git`)
+    skip_dirs.extend([r'\_*'])  # always skip paths that begin with an underscore (e.g., `__pycache__`)
 
     # report configuration: 
-    sys_path_history.metadata['FUPI_ADD_DIRS'] = add_dirs
-    sys_path_history.metadata['FUPI_SKIP_DIRS'] = skip_dirs
+    sys_path_history['metadata']['FUPI_ADD_DIRS'] = add_dirs
+    sys_path_history['metadata']['FUPI_SKIP_DIRS'] = skip_dirs
 
     # if user has flagged add_dirs to NOT RUN, EXIT.  Must be a single entry list matching below:
     if len(add_dirs) == 1 and add_dirs[0].lower() in ['disable','stop','quit','not run','exit','']: return sys_path_history
@@ -194,10 +204,10 @@ def add_dirs_and_children_to_syspath(add_dirs = None, skip_dirs = None) -> dict:
     # add all qualifying paths that contain an interested dirpath anywhere:
     allpaths = []
     for dirname in add_dirs: 
-
         # add any qualifying paths, per add_dirs (as matched strings):
         tdir = Path.cwd().resolve()
-        allpaths.extend([pth for pth in tdir.rglob('*/') if dirname in pth.parts])
+        found_paths = [pth for pth in tdir.rglob('*/') if dirname in pth.parts]
+        allpaths.extend(found_paths)
 
     # remove any non-qualifying paths, per skip_dirs (as regex patterns):
     skip_dirs_re = [re.compile(f'^{pth}$'.replace('*', '.*')) for pth in skip_dirs]
@@ -208,11 +218,9 @@ def add_dirs_and_children_to_syspath(add_dirs = None, skip_dirs = None) -> dict:
     sys.path.extend([str(pth) for pth in allpaths])
 
     # add another entry for our tracking: 
-    sys_path_history.append( {f'sys.path set {len(sys_path_history)}': sys.path.copy()} )
+    sys_path_history['history'].append({f'sys.path set {len(sys_path_history["history"])}': sys.path.copy()})
 
     return sys_path_history
 
 
  
-
-add_dirs_and_children_to_syspath()
