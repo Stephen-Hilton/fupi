@@ -10,17 +10,17 @@ Simply import fupi in your project:
 import fupi
 ```
 
-This automatically detects and adds relevant directories (like `src` and `test`) to your Python path, making imports work seamlessly across your project structure.  This allow you to run components independently, run tests from anywhere, etc. 
+This automatically detects and adds relevant directories (`src`, `test`, `app`) and their children to your Python path, making imports work seamlessly across your project structure regardless of how bad you screw it up.  This allow you to run components independently, run tests from anywhere, etc. 
 
-This can be a bit dangerous in larger projects, as you have no idea what you're actually importing.  You can create local `fupi.env` files to limit the scope to what you care about, which will help. 
+This can be a bit dangerous in larger projects, as you have no idea what you're actually importing.  You can create local `fupi.env` files to limit the scope to what you care about, which will help.  This is a "move fast and break things" type of project. 
 
-Also, you may consider commenting out `import fupi` once you get deployment and testing automated, again to make sure you're not hiding import bugs. By that point you won't need this brute-force tool.  Fupi is really a tool to speed up rapid-deploy tests / POCs / etc., where you're coding fast and loose, and especially for one-person projects (which AI is increasing the number of).
+Also, you may consider commenting out `import fupi` once you get deployment and testing automated / located to a centralized starting point, again to make sure you're not hiding import bugs - by that point you won't likely need this brute-force tool.  Fupi is really a tool to speed up rapid-deploy tests / POCs / etc., where you're coding fast and loose, and especially for one-person projects (of which AI is increasing the number and velocity).
 
 ## Configuration
 
 No configuration is needed if you use the defaults: 
-- Add `src` and `test` folders and subfolders, 
-- Skip most common non-program file folders, like `setup`, `.git`, `venv*`, `__pycache__`, etc.
+- Adds `src`, `test`, `app` folders and subfolders to sys.path... 
+- Skipping most common non-application file folders, like `.git`, `venv*`, `__pycache__`, `setup`, etc.
 
 ### .ENV File Config
 
@@ -71,10 +71,10 @@ fupi.add_dirs_and_children_to_syspath(
 ```
 
 ## Rollback
-Finally, if you want to roll-back to a previous state, the sys.path contents is logged in the object `sys_path_history`
-which captures the pre-execution snapshot at index[0], and subsequent snapshots every time a change is made. This would 
+Finally, if you want to roll-back to a previous state, sys.path contents are logged in the object `sys_path_history`
+which captures the pre-import snapshot at index[0], and subsequent snapshots every time a change is made. This would 
 allow you to 'roll-back' to a pre-exexution state by simply:
 
 ```python
-sys.path = fupi.sys_path_history['history'][0]['sys.path set 0']
+sys.path = fupi.sys_path_history['history'][0]
 ```

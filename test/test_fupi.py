@@ -16,7 +16,7 @@ def test_load_dirnames_from_env_defaults():
         with tempfile.TemporaryDirectory() as tmpdir:
             os.chdir(tmpdir)
             add_dirs, skip_dirs = load_dirnames_from_env()
-            assert add_dirs == ['src', 'test']
+            assert add_dirs == ['src', 'test', 'app']
             assert 'setup' in skip_dirs
             assert 'venv*' in skip_dirs
     finally:

@@ -3,7 +3,7 @@ import sys, os, re
 
 # capture initial state:
 sys_path_history = {
-    'history': [{f'sys.path set 0': sys.path.copy()}],
+    'history': [sys.path.copy()],
     'metadata': {
         'autostarted': True, 
         'required_envar_keys': ['FUPI_ADD_DIRS'],
@@ -11,7 +11,7 @@ sys_path_history = {
         'envars_retrieved_from': None,
         'FUPI_ADD_DIRS': [], 
         'FUPI_SKIP_DIRS': [],
-        'FUPI_ADD_DIRS default': ['src', 'test'], 
+        'FUPI_ADD_DIRS default': ['src', 'test', 'app'], 
         'FUPI_SKIP_DIRS default': ['setup', 'venv*', '*egg*', 'old*', '*old', '*bkup', '*backup']
     }
 }
@@ -218,7 +218,7 @@ def add_dirs_and_children_to_syspath(add_dirs = None, skip_dirs = None) -> dict:
     sys.path.extend([str(pth) for pth in allpaths])
 
     # add another entry for our tracking: 
-    sys_path_history['history'].append({f'sys.path set {len(sys_path_history["history"])}': sys.path.copy()})
+    sys_path_history['history'].append(sys.path.copy())
 
     return sys_path_history
 
