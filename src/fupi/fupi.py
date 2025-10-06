@@ -215,7 +215,7 @@ def add_dirs_and_children_to_syspath(add_dirs = None, skip_dirs = None) -> dict:
          
     # add allpaths to the sys.path for the current process, 
     # thereby (hopefully) side-stepping python import-hell. 
-    sys.path.extend([str(pth) for pth in allpaths])
+    sys.path.extend([str(pth) for pth in allpaths if str(pth) not in sys.path])
 
     # add another entry for our tracking: 
     sys_path_history['history'].append(sys.path.copy())
