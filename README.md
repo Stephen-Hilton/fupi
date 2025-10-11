@@ -39,7 +39,7 @@ The `FUPI_ADD_DIRS` will be string-matched against folders in your project, and 
 The `FUPI_SKIP_DIRS` is a collection of regex patterns to skip, with string begin and end tags added (`^value$`).  Thus you can simply add a list of folder names, or use basic wildcard * characters. If
 you want to get crazy with regex, be my guest - but understand the value will be wrapped (`^value$`).
 
-The `FUPI_SKIP_DIRS` will also always append patters to disqualify any path starting with a period('.')
+The `FUPI_SKIP_DIRS` will also always append patterns to disqualify any path starting with a period('.')
 or an underscore('_') (i.e., `'\.*'` and `'\_*'`), which should catch most common skipped folders like
 `.git`, `__pycache__`, etc.
 
