@@ -77,3 +77,9 @@ allow you to 'roll-back' to a pre-exexution state by simply:
 ```python
 sys.path = fupi.sys_path_history['history'][0]
 ```
+
+## Linters
+
+The auto-load feature was designed to get down to two words for most use-cases: `import fupi` - nothing else is needed.
+One minor disadvantage; linters will often see this as an unused import, and flag it for removal, and/or give you a yellow squiggly underline.
+If that bothers you, you can use the [Manual Settings](#manual-settings) approach, or um, maybe log the fupi.sys_path_history, just for fun?  
