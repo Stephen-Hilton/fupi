@@ -32,7 +32,7 @@ FUPI_ADD_DIRS="src,test"
 FUPI_SKIP_DIRS="setup,venv*,*egg*"
 ```
 
-The program will evaluate every `*.env` file it finds in the current working directory, it's parent, and all it's children. It then picks the best one that contains the two envars below:
+The program will evaluate every `*.env` file it finds in the current working directory, it's parent, and all it's children. It then picks the best one that contains the two envars above.  Those envars have slightly different behaviors:
 
 The `FUPI_ADD_DIRS` will be string-matched against folders in your project, and on exact match, will include that folder and all subfolders into your sys.path.
 
