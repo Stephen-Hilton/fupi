@@ -45,17 +45,14 @@ or an underscore('_') (i.e., `'\.*'` and `'\_*'`), which should catch most commo
 
 ### Environment Variable Config
 
-Alternatively, you can add the above to os.envars before you `import fupi`.  Note, this process does NOT
-use `dotenv`, which would also load into os.envars, although the behavior is similar, just restricted
-to only `FUPI_*` configs.  Similar to the .env approach above, simply add a comma-delimited list of all folder names / regex patterns. 
+Alternatively, you can add the above to os.envars BEFORE you `import fupi`.  Similar to the .env approach above, simply add a comma-delimited list of all folder names / regex patterns. 
+
+Note, this process does NOT use `dotenv`, as it would auto-load ALL contents of .env files into os.envars, which could lead to unpredictable behavior.  The process is very similar, but restricted to only `FUPI_*` variables.
 
 ### Manual Setting
 
 You can also manually call the functions in the fupi libary with whatever settings you'd like.
-To take advantage of this option, you'll have to escape the default behavior of running all logic on `import fupi`,
-automatically.  Or, you can reset the `sys.path` using the roll-back ability, below.
-
-To escape the auto-run, add a single .env or envvar as per below:
+To take advantage of this option, you'll have to escape the default behavior to auto-load to sys.path on `import fupi`.  To escape the auto-run, add a single .env or envvar as per below:
 
 ```
 FUPI_ADD_DIRS="disable"
@@ -69,9 +66,11 @@ fupi.add_dirs_and_children_to_syspath(
     add_dirs=['my','app','folders'], 
     skip_dirs=['not','*these*'])
 ```
+ 
+Alternatively, you can allow the auto-load, then reset the `sys.path` using the roll-back ability, below.
 
 ## Rollback
-Finally, if you want to roll-back to a previous state, sys.path contents are logged in the object `sys_path_history`
+If you want to roll-back to a previous state, sys.path contents are logged in the object `sys_path_history`
 which captures the pre-import snapshot at index[0], and subsequent snapshots every time a change is made. This would 
 allow you to 'roll-back' to a pre-exexution state by simply:
 
