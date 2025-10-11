@@ -10,11 +10,11 @@ Simply import fupi in your project:
 import fupi
 ```
 
-This automatically detects and adds relevant directories (`src`, `test`, `app`) and their children to your Python path, making imports work seamlessly across your project structure regardless of how bad you screw it up.  This allow you to run components independently, run tests from anywhere, etc. 
+This automatically detects and adds relevant directories (`src`, `test`, `app`) and their children to your sys.path, making imports work seamlessly across your project structure regardless of how bad you screw it up.  This allow you to run components independently, run tests from anywhere, etc. 
 
-This can be a bit dangerous in larger projects, as you have no idea what you're actually importing.  You can create local `fupi.env` files to limit the scope to what you care about, which will help.  This is a "move fast and break things" type of project. 
+This can be a bit dangerous in larger projects with potentially duplicate namespaces, as you'd have no idea what you're actually importing unless you're explicit.  You can create a local `fupi.env` file to limit the scope of what it auto-adds to sys.path, which will help.  This is a "move fast and break things" type of project; you have been warned. 
 
-Also, you may consider commenting out `import fupi` once you get deployment and testing automated / located to a centralized starting point, again to make sure you're not hiding import bugs - by that point you won't likely need this brute-force tool.  Fupi is really a tool to speed up rapid-deploy tests / POCs / etc., where you're coding fast and loose, and especially for one-person projects (of which AI is increasing the number and velocity).
+Also, you may consider commenting out `import fupi` once you get deployment and testing automated / located to a centralized starting point, again to make sure you're not hiding import bugs - by that point you won't likely need this brute-force tool.  Fupi is really good at speeding up rapid-deploy tests / POCs / etc. by allowing you to import from anywhere in your project, starting from anywhere else in your project - aka coding fast and loose. This is most useful for one-person projects (of which AI is increasing the number and velocity).
 
 ## Configuration
 
