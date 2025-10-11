@@ -81,5 +81,5 @@ sys.path = fupi.sys_path_history['history'][0]
 ## Linters
 
 The auto-load feature was designed to get down to two words for most use-cases: `import fupi` - nothing else is needed.
-One minor disadvantage; linters will often see this as an unused import, and flag it for removal, and/or give you a yellow squiggly underline.
-If that bothers you, use the [Manual Settings](#manual-settings) approach, or um, `logger.info( fupi.sys_path_history )` for posterity's sake? Couldn't hurt. 
+One minor disadvantage; linters will often see this as an unused import, and flag it for removal, and/or give you a yellow squiggly underline. Or, an overly-ambitious AI coding tool may drop it without warning. If either bothers you, use the [Manual Settings](#manual-settings) approach, or um, `logger.info( fupi.sys_path_history )` for posterity's sake? Couldn't hurt. 
+If it gets to be a real problem, I can add `fupi.do_really_important_things()` that does nothing.  Let AI figure that out.
