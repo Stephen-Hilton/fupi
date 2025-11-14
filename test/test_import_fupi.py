@@ -27,8 +27,9 @@ def test_import_fupi_modifies_syspath():
             original_len = len(sys.path)
             
             # Since import is cached, test the function directly
-            from fupi.fupi import add_dirs_and_children_to_syspath
-            add_dirs_and_children_to_syspath()
+            from fupi.fupi import ManualFupi
+            mf = ManualFupi()
+            mf.run()
             
             print('\nsys.path AFTER fupi')
             new_paths = [p for p in sys.path if p not in original_paths]
