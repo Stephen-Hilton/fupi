@@ -2,7 +2,7 @@ from pathlib import Path
 import sys, re, os 
 
 # Default configuration lists - accessible for manual configuration and extended via environment variables
-DEFAULT_ADD_DIR_NAMES = ['src', 'app', 'main', 'test', 'tests']
+DEFAULT_ADD_DIR_NAMES = ['src', 'app', 'main', 'test', 'tests', 'mcp']
 DEFAULT_SKIP_DIR_PATTERNS = ['setup', 'venv*', '*egg*', 'old*', '*old', '*bkup', '*backup']
 
 # Environment variables: FUPI_ADD_DIR_NAMES and FUPI_SKIP_DIR_PATTERNS can extend the defaults
@@ -32,6 +32,7 @@ class ManualFupi:
     """
     add_dir_names: list = []
     skip_dir_patterns: list = []
+    shortest_path: Path = None
     
     def __init__(self, add_dir_names=[], skip_dir_patterns=[], autorun: bool = False):
         """Initialize ManualFupi with default configuration.
@@ -111,7 +112,12 @@ class ManualFupi:
 
         # REMOVE any paths that matches one of our skip_dirs patterns (as regex patterns)
         skip_dirs_re = [re.compile(f'^{pth}$'.replace('*', '.*')) for pth in skip_dirs]
-        allpaths = [pth for pth in allpaths if not any([s.match(part) for part in pth.parts for s in skip_dirs_re])]
+        allpaths = [Path(pth).resolve() for pth in allpaths if not any([s.match(part) for part in pth.parts for s in skip_dirs_re])]
+
+        # Save the path with the fewest parts (closest to cwd). If there
+        # are no candidate paths, set to None. Tie-break lexicographically
+        # on path string for deterministic selection.
+        self.shortest_path = min(allpaths, key=lambda p: (len(p.parts), p.as_posix())) if allpaths else None
 
         return allpaths
     
