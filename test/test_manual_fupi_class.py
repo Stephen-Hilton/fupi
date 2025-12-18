@@ -5,7 +5,9 @@ import tempfile
 import os
 from pathlib import Path
 
-from fupi import ManualFupi, DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS
+# Add src to path for testing
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+from fupi.fupi import ManualFupi, DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS
 
 
 class TestManualFupiClass:
@@ -165,7 +167,7 @@ class TestManualFupiClass:
             
             # Verify skip patterns
             assert 'setup' in mf.skip_dir_patterns
-            assert 'venv*' in mf.skip_dir_patterns
+            assert 'venv.*' in mf.skip_dir_patterns
             assert 'custom_build' in mf.skip_dir_patterns
             assert 'custom_dist' in mf.skip_dir_patterns
         finally:
@@ -248,5 +250,22 @@ class TestManualFupiClass:
 
 
 if __name__ == '__main__':
-    import pytest
-    pytest.main([__file__, '-v'])
+    test = TestManualFupiClass()
+    test.test_init_empty_lists_use_defaults()
+    test.test_init_parameters_extend_with_environment_variables()
+    test.test_init_with_both_parameters()
+    test.test_init_with_skip_dir_patterns_parameter()
+    test.test_init_with_add_dir_names_parameter()
+    test.test_environment_variable_with_simple_values()
+    test.test_environment_variable_extension()
+    test.test_manual_fupi_multiple_runs()
+    test.test_manual_fupi_run_partial_parameters()
+    test.test_manual_fupi_run_with_parameters()
+    test.test_manual_fupi_run_with_attributes()
+    test.test_manual_fupi_returns_sys_path_history()
+    test.test_manual_fupi_set_attributes()
+    test.test_manual_fupi_instantiation()
+    test.test_manual_fupi_defaults_not_shared()
+    test.test_manual_fupi_get_paths_uses_attributes()
+    test.test_manual_fupi_get_paths_preview()   
+    pass

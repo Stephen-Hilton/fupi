@@ -1,8 +1,6 @@
-import sys
-import os
+import os, sys, shutil, tempfile
 from pathlib import Path
-import tempfile
-import importlib
+
 
 def test_import_fupi_modifies_syspath():
     """Test the primary use-case: importing fupi should modify sys.path"""
@@ -48,8 +46,9 @@ def test_import_fupi_modifies_syspath():
             
             assert src_found or test_found, "Neither src nor test directories were added"
     finally:
+        shutil.rmtree(tmpdir, True)
         os.chdir(original_cwd)
 
 if __name__ == '__main__':
     test_import_fupi_modifies_syspath()
-    print("Import test passed!")
+    pass

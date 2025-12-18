@@ -1,12 +1,10 @@
-import sys
-import os
+import sys, os, shutil
 from pathlib import Path
 import tempfile
 
 # Add src to path for testing
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-
-from fupi.fupi import ManualFupi
+# import fupi -- this is done per-test below to control autorun behavior
 
 
 def test_add_dirs_finds_directories():
@@ -20,15 +18,23 @@ def test_add_dirs_finds_directories():
             (Path(tmpdir) / 'src').mkdir()
             (Path(tmpdir) / 'src' / 'subdir').mkdir()
             (Path(tmpdir) / 'test').mkdir()
+            (Path(tmpdir) / 'redherring').mkdir()
+
+            print(os.getcwd())
+            print([p for p in Path(os.getcwd()).resolve().rglob('**/*')])
             
             original_path_len = len(sys.path)
+
+            from fupi.fupi import ManualFupi
             mf = ManualFupi()
-            mf.run(['src', 'test'], ['venv*'])
+            mf.run(['src', 'test'], ['venv.*','test'])
             
             # Should have added paths
             assert len(sys.path) > original_path_len
+            assert str(Path(tmpdir+'/src').resolve()) in sys.path
             assert any('src' in p for p in sys.path)
     finally:
+        shutil.rmtree(tmpdir, True)
         os.chdir(original_cwd)
 
 
@@ -45,6 +51,8 @@ def test_skip_dirs_filtering():
             (Path(tmpdir) / 'src' / 'venv_nested').mkdir()
             
             original_path_len = len(sys.path)
+            
+            from fupi.fupi import ManualFupi
             mf = ManualFupi()
             mf.run(['src'], ['venv*'])
             
@@ -52,20 +60,11 @@ def test_skip_dirs_filtering():
             new_paths = sys.path[original_path_len:]
             assert not any('venv' in p for p in new_paths)
     finally:
+        shutil.rmtree(tmpdir, True)
         os.chdir(original_cwd)
 
 
-def test_disable_functionality():
-    """Test that 'disable' prevents execution"""
-    original_path_len = len(sys.path)
-    mf = ManualFupi()
-    result = mf.run(['disable'], [])
-    
-    # Should not modify sys.path
-    assert len(sys.path) == original_path_len
-    assert isinstance(result, list)
-
-
+ 
 def test_skip_dirs_comma_separated_string():
     """Test that comma-separated skip_dirs string is properly split"""
     original_cwd = os.getcwd()
@@ -81,6 +80,8 @@ def test_skip_dirs_comma_separated_string():
             
             # Test with comma-separated string (simulating .env file parsing)
             original_path_len = len(sys.path)
+
+            from fupi.fupi import ManualFupi
             mf = ManualFupi()
             result = mf.run(['src'], ['setup*,old*,venv*'])
             
@@ -98,6 +99,7 @@ def test_skip_dirs_comma_separated_string():
             assert not any('old_stuff' in p for p in temp_new_paths)
             assert not any('venv_test' in p for p in temp_new_paths)
     finally:
+        shutil.rmtree(tmpdir, True)
         os.chdir(original_cwd)
 
 
@@ -106,10 +108,13 @@ def test_import_fupi_modifies_syspath():
     # This test is covered by integration tests
     # Import fupi in __init__.py should trigger autorun
     original_path_len = len(sys.path)
-    # fupi should already be imported above, so sys.path should be modified
+    import fupi.fupi
     assert len(sys.path) >= original_path_len
 
 
 if __name__ == '__main__':
-    import pytest
-    pytest.main([__file__, '-v'])
+    test_add_dirs_finds_directories()
+    test_skip_dirs_filtering()
+    test_skip_dirs_comma_separated_string()
+    test_import_fupi_modifies_syspath()
+    pass

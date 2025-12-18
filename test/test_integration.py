@@ -1,6 +1,4 @@
-import subprocess
-import tempfile
-import os
+import subprocess, tempfile, os, shutil
 from pathlib import Path
 
 def test_fupi_import_integration():
@@ -62,6 +60,9 @@ else:
         assert result.returncode == 0, f"Integration test failed. Return code: {result.returncode}"
         assert "SUCCESS: fupi added paths to sys.path" in result.stdout
 
+        test_script.unlink() # delete test script
+        shutil.rmtree(tmpdir, True)
+
 if __name__ == '__main__':
     test_fupi_import_integration()
-    print("Integration test passed!")
+    pass

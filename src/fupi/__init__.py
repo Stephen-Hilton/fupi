@@ -19,43 +19,15 @@ import os
 
 try:
     # import the implementation module
-    from . import fupi as _core
-    from .fupi import autorun, ManualFupi
-
-    # expose a helper name for manual configuration importers
-    def manual_config(add_dirs=None, skip_dirs=None):
-        """Optional convenience wrapper for manual configuration.
-
-        Usage patterns:
-        - `from fupi import manual_config` will *not* auto-run the package.
-          Call `manual_config(add_dirs, skip_dirs)` to configure paths.
-        - `import fupi` will auto-run as before.
-        
-        Note: For new code, prefer using the ManualFupi class:
-        - `from fupi import ManualFupi`
-        - `mf = ManualFupi()`
-        - `mf.add_dir_names = ['src', 'test']`
-        - `mf.skip_dir_patterns = ['venv*']`
-        - `mf.run()`
-        """
-        # If called with parameters, perform configuration immediately; if
-        # called with no arguments it is effectively a no-op (acts as a
-        # sentinel import target to avoid auto-start).
-        if add_dirs is not None and skip_dirs is not None:
-            mf = ManualFupi()
-            return mf.run(add_dir_names=add_dirs, skip_dir_patterns=skip_dirs)
-        return None
-
-    # Import the new constant names from core module
-    from .fupi import DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS
-
-    __all__ = ['manual_config', 'ManualFupi', 'DEFAULT_ADD_DIR_NAMES', 'DEFAULT_SKIP_DIR_PATTERNS']
+    from .fupi import ManualFupi, DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS, shortest_path
+    __all__ = ['ManualFupi', 'shortest_path', 'DEFAULT_ADD_DIR_NAMES', 'DEFAULT_SKIP_DIR_PATTERNS']
+    shortest_path = []
 
     # Lightweight heuristic to detect `from fupi import ...` vs `import fupi`.
     # We scan the import call stack for a textual `from fupi import` occurrence.
     # If found, suppress auto-run. If we can't find such a pattern we default
     # to auto-running to preserve existing behaviour.
-    def _import_was_from_style() -> bool:
+    def _import_was__from__style() -> bool:
         """Return True if the import appears to be a `from fupi import ...` call.
 
         Heuristic: scan the call stack frames. If a source line containing
@@ -89,9 +61,10 @@ try:
                     continue
 
                 # look for explicit patterns
-                if 'from fupi import' in joined:
+                # Catch both `from fupi import` and `from fupi.X import` (e.g., `from fupi.fupi import`)
+                if 'from fupi' in joined and 'import' in joined:
                     return True
-                if 'import fupi' in joined:
+                if 'import fupi' in joined and 'from' not in joined:
                     return False
         except Exception:
             # Be conservative: if stack inspection fails, allow autorun
@@ -100,18 +73,14 @@ try:
         # no clear evidence of a `from`-style import
         return False
 
-    # decide whether to autorun: only run when not importing via `from fupi import ...`
-    was_from_style = _import_was_from_style()
-    
-    # Record autostart state
-    try:
-        _core.autostarted = not was_from_style
-    except Exception:
-        pass
-
-    if not was_from_style:
+    # if `from fupi import ManualFupi` style detected, skip autorun:
+    was__FROM__import = _import_was__from__style()
+    if not was__FROM__import:
         try:
-            autorun()
+            AutoFupi = ManualFupi(autorun=True)
+            shortest_path = AutoFupi.shortest_path()
+
+            pass # module exits after this point, in normal operations
         except Exception as e:
             import traceback, sys as _sys
             print(f"Error importing or running fupi: {e}", file=_sys.stderr)
