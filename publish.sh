@@ -1,15 +1,14 @@
-setop
-echo "Remeber to update the version in the pyproject.toml file."
-echo "You can do it now, if needed.  Press enter when ready."
-read _ 
+#!/usr/bin/env bash
+# Build and upload fupi to PyPI. Run from anywhere; it works from the repo root.
+set -euo pipefail
+cd "$(dirname "$0")"
 
-cd ~/Dev/fupi
-rm -r dist src/*.egg-info
-pip install --upgrade pip
-python3 -m pip install "setuptools<68.0.0" wheel build twine
-python3 -m pip install --upgrade pip
-python3 -m pip install --upgrade twine
-python3 -m pip install --upgrade build
+echo "Remember to update the version in pyproject.toml (and __version__ in src/fupi/__init__.py)."
+echo "Press enter when ready."
+read -r _
+
+rm -rf dist src/*.egg-info
+python3 -m pip install --upgrade pip build twine
 python3 -m build
 
 # check before we upload:

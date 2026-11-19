@@ -1,209 +1,116 @@
 # fupi
 
-A brute-force shortcut to fix python import hell. Acronym standing for... um, "Fixing-Up Python Imports."  Sure, let's go with that. 
+A brute-force shortcut to fix Python import hell. Acronym standing for... um, "Fixing-Up Python Imports." Sure, let's go with that.
+
+> **Not a best practice.** fupi edits `sys.path` so peer folders in a POC or demo can import each other without packaging. For real projects, use a proper package layout and `pip install -e .`. fupi is for when you just want the demo to run.
+
+> **Breaking change from v1.** fupi 2.0.0 is a rewrite. `ManualFupi`, `shortest_path`, `FUPI_ADD_DIR_NAMES` and CWD-based scanning are gone. See [Migrating from 1.x](#migrating-from-1x).
 
 ## Usage
 
-You can use fupi in two ways:
-
-### 1. Auto-Configuration (Quick Start)
-
-Simply import fupi in your project:
-
 ```python
 import fupi
 ```
 
-Done - that's all you need! On import, fupi will automatically detect and add common top-level code directories, along with all children directories (minus common excluded patterns) to your sys.path, making imports work seamlessly across your project regardless of your CWD / where you start the code from.  
+That's it. Everything is relative to the **directory of the file containing `import fupi`** (not your CWD), so the script behaves the same no matter where you run it from. A bare `import fupi` adds:
 
-Practically speaking, it lets you test any code from any location within you project, without hitting "python import hell".
+- that directory,
+- all of its subdirectories (recursively, minus [skipped ones](#skip-patterns)),
+- its parent directory (just the parent, not the parent's other children).
 
-By default, fupi will:
-- automatically add to sys.path directories that exactly match
-    - `src/`, `app/`, `main/`, `test/`, `tests/`, `mcp/`
-- ...and all children directories 
-- ...excluding any directory that match the regex patterns:
-    - `setup`, `venv.*`, `.*\.egg.*`, `old.*`, `bkup|backup`
-    - ...or any directory that starts with a period `.` or underscore `_`
-
-### 2. Auto-Config Options
-
-What if your top-level code directory isn't included in the list above?  i.e., `myapp`?  No problem - Envvars FTW.
-
-You can provide additional directory names/patterns to the lists above by setting the environment variables:
-
-```
-FUPI_ADD_DIR_NAMES="myapp, test_myapp, etc"
-FUPI_SKIP_DIR_PATTERNS="trial, myvenv, custom.*"
-```
-
-- `FUPI_ADD_DIR_NAMES`: Additional directory names to recursively add to sys.path
-    - an **exact string match**, so you must specify your exact directory name, i.e., `myapp`, `code`, `my_best_convension_ever`, etc.
-- `FUPI_SKIP_DIR_PATTERNS`: Additional directory regex patterns to skip
-    - a **regex pattern match**, allowing you to add patterns to exclude, i.e., `doc.*s` will skip both `docs` and `documents`
-    - Patterns are regular expressions matched against each directory name (using `re.match`), so patterns are tested against each path element. For example, `setup` matches a directory named `setup`, and `venv.*` matches any directory starting with `venv` (and therefore its children).
-    - for help with regex:  https://pythex.org/ 
- 
-### 3. Manual Configuration
-
-For even MORE control, you can suppress the auto-configuration and configure fupi manually.  This is nice for smaller projects, as it gives you exact control per-file. However, hard-coding directory names for every file is less awesome - if you're using broadly, consider setting environment variables, per the above section.
-
-To escape the autorun behavior, use the `from fupi import ManualFupi` (instead of `import fupi`).  The project will detect the method of import and suppress the autorun, allowing you to config before running.  For example:
-
-```python
-from fupi import ManualFupi
-
-mf = ManualFupi(add_dir_names=['src', 'test'],
-                skip_dir_patterns = ['setup', 'venv*'], 
-                autorun = True)
-```
-
-While setting environment variables is additive, manually configuring like above will override defaults, so you'll need to be complete.  If you omit setting a list, it will revert to defaults.
-
-If you perform a manual configuration and still set environment variables `FUPI_ADD_DIR_NAMES` or `FUPI_SKIP_DIR_PATTERNS`, they will be **appended** to the provided (or default) values.
-
- The constructor also accepts an `autorun` boolean. If `autorun =True` the instance will immediately call `run()` during initialization (convenient for short scripts). By default, in manual mode `autorun=False`.
-
-
-#### A few examples of calling manual mode:
-
-```python
-# if all you're doing is manually setting folder names:
-from fupi import ManualFupi
-mf = ManualFupi(add_dir_names=['src', 'test'],
-                skip_dir_patterns = ['setup', 'venv*'])
-mf.run()
-```
-
-```python
-# anything you don't set reverts to defaults:
-from fupi import ManualFupi
-
-mf = ManualFupi(add_dir_names=['src', 'test'])
-print(mf.skip_dir_patterns) 
-#  ['setup', 'venv.*', '.*\.egg.*', 'old.*', 'bkup|backup']
-
-mf.run()
-```
-
-
-```python
-# If you want to ADD one value to a list:
-from fupi import ManualFupi
-
-mf = ManualFupi()
-mf.skip_dir_patterns.append('ignore')
-print(mf.skip_dir_patterns) 
-#  ['setup', 'venv.*', '.*\.egg.*', 'old.*', 'bkup|backup', 'ignore']
-
-mf.run()
-```
-
-
-```python
-# all in one call:
-from fupi import ManualFupi, DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS
-
-mf = ManualFupi(add_dir_names = [*DEFAULT_ADD_DIR_NAMES, 'foo', 'bar'],
-                skip_dir_patterns = [*DEFAULT_SKIP_DIR_PATTERNS, 'baz.*'],
-                autorun = True )
-```
-
-```python
-# if you want to preview paths added:
-from fupi import ManualFupi
-
-mf = ManualFupi()
-print(mf.get_paths()) # returns the list of Paths added to sys.path
-mf.run()
-```
-
-```python
-# or if you're more loquacious:
-from fupi import ManualFupi, DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS
-
-mf = ManualFupi()
-add =  [*DEFAULT_ADD_DIR_NAMES, 'foo', 'bar']
-skip = [*DEFAULT_SKIP_DIR_PATTERNS, 'baz.*']
-
-testpath = '/some/path'
-do_import = testpath in mf.get_paths(add, skip)
-
-if do_import: 
-    mf.run(add, skip)
-```
-
-All that said, in the end this: 
-```python
-import fupi
-```` 
-...runs the same code as this:
-
-```python
-from fupi import ManualFupi
-mf = ManualFupi(autorun=True)
-```
- 
-
-## Other Functions
-
-### Rollbacks
-Every time `mf.run()` is called, both the existing `sys.path` list and the newly enriched `sys.path` is saved to an internal list on the `ManualFupi` instance: `mf.sys_path_history`. This allows you to rollback by overwriting `sys.path` with the backup of your choice.
-
-For example:
-
-```python
-from fupi import ManualFupi
-
-# create and run (or pass `autorun=True` to the constructor)
-mf = ManualFupi(autorun=True)
-
-# don't like it?
-sys.path = mf.sys_path_history[0]  # Reset sys.path to pre-import state
-sys.path = mf.sys_path_history[-1] # Reset sys.path to most current state
-```
-
-The sys_path_history is kept in the ManualFupi object, so if you want to rollback changes, you need to use the `from fupi import ManualFupi` import approach (or, simpy save your own sys.path snapshot).
-
-
-### Shortest Path
-
-Sometimes it's useful to know the shortest path available.  For instance, if your project source code directory is `/usr/you/dev/project/src` then fupi will add that **plus all children** to your `sys.path`.  To quickly get back to your source directory, you can use the `mf.shortest_path()` method.  This is only available with ManualFupi.
-
-**"Shortest"** is measured in number of total directories (Path.parts), with a lexicographically (aka alphetic) tiebreaker.  
-
-For example, assume you source directory is `./src/`
-
-```python
-from fupi import ManualFupi
-mf = ManualFupi(autorun=True)
-
-src_path = mf.shortest_path() # the `./src/` path
-proj_path = src.parent #  project root
-```
-
-By default, the `shortest_path()` only includes paths that were added by fupi, however you can pass in any list of paths.  For example:
-
-```python
-from fupi import ManualFupi
-mf = ManualFupi(autorun=True)
-
-mypath = mf.shortest_path( sys.path )
-```
-
-Keep in mind, there may be "shorter" paths already in `sys.path`, so you may not get what you're expecting.   This was really added to quickly get to the "root" directory of paths added by fupi (aka your project 'root' path).
-
-The module does expose the default `shortest_path` when run, meaning you don't need to run ManualFupi, however since the auto-run only happens once, means the `shortest_path` is only updated once.  Also note, that shortest_path is a Path object here, whereas it's a function in the ManualFupi.
+Paths are appended to the end of `sys.path` (so the stdlib and installed packages are never shadowed), deduplicated and sorted. `fupi.paths_added` lists what was added; referencing it also keeps "unused import" linters quiet:
 
 ```python
 import fupi
-src_path = fupi.shortest_path # Path to `./src/`
+print(fupi.paths_added)
 ```
 
-## Linters and AI Coders
+### Exception: no file (REPL, notebook, `python -c`)
 
-The auto-load feature was designed to get down to two words for most use-cases: `import fupi` - nothing else is needed.
+With no file to anchor to, for example in the interactive `python` prompt (the REPL), a Jupyter notebook, or `python -c`, fupi uses the **current working directory** instead. In that case a bare `import fupi` is more conservative. It adds only:
 
-One minor disadvantage; linters will often see this as an unused import and flag it for removal, and/or give you a yellow squiggly underline. Or, an overly-ambitious AI coding tool may drop it without warning. If that becomes a problem, you can always print the fupi.shortest_path
+- the CWD,
+- its immediate subdirectories (one level, not recursive),
+- its parent directory.
 
- 
+That's the `up1_down1` shortcut. It keeps `import fupi` safe even if you start Python from `/` or your home folder. For the full file-style default from the CWD, import the shortcut explicitly:
+
+```python
+import fupi.up1_down     # CWD, its whole subtree, and its parent
+```
+
+## Shortcuts
+
+Want different folders? Import a shortcut instead:
+
+```python
+import fupi.up2          # parent and grandparent
+import fupi.up1down2     # parent, its children, and their children
+```
+
+A shortcut **replaces** the bare default; it is not added on top of it.
+
+A name is made of **steps**. `upN` climbs N levels and `down`/`downK` descends K levels (unlimited without a number), adding every folder it passes. Steps run left to right, each starting where the previous one ended. Groups separated by `_` each start fresh at your file's directory, and the result is the union of every group. Your file's directory is always included.
+
+| Name | Adds (A = your file's directory, P = parent, G = grandparent) |
+|---|---|
+| `up1` | P |
+| `up2` | P, G |
+| `down` | every subdirectory of A, at any depth |
+| `down1` | A's children |
+| `up1down2` | P, P's children (A and its siblings), and their children |
+| `up2down1` | P, G, and G's children |
+| `down2_up1` | A's children and grandchildren, plus P alone |
+| `up1down2_up3` | the `up1down2` result, plus P, G and the great-grandparent |
+| `down_up1` or `up1_down` | what bare `import fupi` does from a file |
+| `up1_down1` | what bare `import fupi` does with no file (REPL, notebook) |
+
+Rules:
+- `N` and `K` must be at least 1. Invalid names (`up0`, `up`, `up1__down`, ...) raise `ModuleNotFoundError`.
+- Running out of folders is fine: `up100` stops below the filesystem root (which is never added), and `down100` stops at the bottom of the tree.
+- A step that finds folders but none of them are new emits a `UserWarning`, because the name can be simplified. For example, `down2up1` climbs back onto folders `down2` already added.
+
+### Sanity limit
+
+One import may select at most `FUPI_DIR_LIMIT` folders (default `1000`). Names like `up100down` would otherwise put a large part of your disk on `sys.path`. Going over raises `fupi.FupiLimitError` before `sys.path` is touched. Narrow the name, or set a higher limit before importing:
+
+```bash
+FUPI_DIR_LIMIT=5000 python my_script.py
+```
+
+## Skip patterns
+
+Descent skips (and never enters) folders whose **name** fully matches one of these regexes:
+
+```python
+fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS
+# (r"\..*", r"_.*", r"venv.*", r"env", r".*\.egg-info", r"node_modules", r"old.*", r"(bkup|backup).*")
+```
+
+- Matching uses `re.fullmatch` on each folder name. **This changed from 1.x**, which used prefix matching: `doc` no longer skips `docs`, so write `doc.*` instead.
+- Folders chosen explicitly (your file's directory, its parent and other ancestors) are never tested, so a project under `~/old_work/src/` still works.
+- **Add patterns for every run** with a comma-separated env var, which appends to the defaults (commas inside a regex aren't supported):
+  ```bash
+  FUPI_SKIP_DIR_PATTERNS="build, dist, doc.*"
+  ```
+- **Override in code** by assigning a list, tuple, set, or single string. This replaces everything, including the defaults:
+  ```python
+  import fupi
+  fupi.skip_dir_patterns = ["build", "dist"]
+  import fupi.up1down2          # uses the new patterns
+  fupi.skip_dir_patterns = fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS   # reset
+  ```
+  Limitation: the bare run happens during `import fupi`, so an in-code override only affects shortcut imports that run afterward. The env var affects everything.
+
+## Migrating from 1.x
+
+| 1.x | 2.0 |
+|---|---|
+| Scanned from the CWD for `src`, `app`, `main`, `test`, `tests`, `mcp` | Anchors at the importing file; adds it, its subtree and its parent |
+| `FUPI_ADD_DIR_NAMES` | Removed. Use a shortcut such as `import fupi.up1down2` |
+| `ManualFupi(...)`, `from fupi import ManualFupi` | Removed. Use shortcuts and `fupi.skip_dir_patterns` |
+| `shortest_path`, `sys_path_history`, rollback | Removed |
+| Skip patterns prefix-matched (`re.match`) | Skip patterns must fully match the folder name (`re.fullmatch`) |
+| Paths could be inserted anywhere | Always appended, sorted, deduplicated |
+
+Requires Python 3.11+, standard library only.

@@ -1,92 +1,151 @@
-"""fupi package initializer.
+"""fupi: put nearby directories on sys.path with one line, `import fupi`.
 
-Behavior:
-- A plain `import fupi` will automatically run the path-adding side-effect
-  (preserves existing behavior).
-- A `from fupi import manual_config` (or any `from fupi import ...`) will
-  suppress the automatic run so the user can configure manually.
-- You can also set environment variables FUPI_ADD_DIR_NAMES and FUPI_SKIP_DIR_PATTERNS 
-  to extend the default directory names and skip patterns used by either 
-  manual or automatic runs.
-
-This implements a small, best-effort detection by inspecting the importer's
-call-site context. It's lightweight and intentionally conservative: if we
-can't detect a `from fupi import` invocation (very rare) we default to 
-auto-running to preserve backwards-compatibility.
+A deliberate shortcut for POCs and demos, knowingly not a best practice.
+Shortcuts such as `import fupi.up1` or `import fupi.up1down2_up3` pick other folders.
 """
-
+import importlib.abc
+import importlib.util
+import inspect
 import os
+import re
+import sys
+import warnings
+from pathlib import Path
 
-try:
-    # import the implementation module
-    from .fupi import ManualFupi, DEFAULT_ADD_DIR_NAMES, DEFAULT_SKIP_DIR_PATTERNS, shortest_path
-    __all__ = ['ManualFupi', 'shortest_path', 'DEFAULT_ADD_DIR_NAMES', 'DEFAULT_SKIP_DIR_PATTERNS']
-    shortest_path = []
+__version__ = "2.0.0"
+__all__ = ["paths_added", "skip_dir_patterns", "FUPI_DEFAULT_SKIP_DIR_PATTERNS", "FupiLimitError"]
 
-    # Lightweight heuristic to detect `from fupi import ...` vs `import fupi`.
-    # We scan the import call stack for a textual `from fupi import` occurrence.
-    # If found, suppress auto-run. If we can't find such a pattern we default
-    # to auto-running to preserve existing behaviour.
-    def _import_was__from__style() -> bool:
-        """Return True if the import appears to be a `from fupi import ...` call.
+FUPI_DEFAULT_SKIP_DIR_PATTERNS = (r"\..*", r"_.*", r"venv.*", r"env", r".*\.egg-info",
+                                  r"node_modules", r"old.*", r"(bkup|backup).*")
+_env = (p.strip().strip("'\"").strip() for p in os.environ.get("FUPI_SKIP_DIR_PATTERNS", "").split(","))
+skip_dir_patterns = list(FUPI_DEFAULT_SKIP_DIR_PATTERNS) + [p for p in _env if p]
+paths_added: list[str] = []  # every path this process added to sys.path
+_bare_added: list[str] = []  # paths added by the bare `import fupi` run (replaced by shortcuts)
+_GROUP = re.compile(r"(?:up\d+|down\d*)+")
+_INTERNAL = (os.path.dirname(os.path.abspath(__file__)) + os.sep,
+             os.path.dirname(importlib.util.__file__) + os.sep, "<frozen importlib")
 
-        Heuristic: scan the call stack frames. If a source line containing
-        `from fupi import` is found, return True. If a source line containing
-        a plain `import fupi` is found before any `from` hint, return False.
 
-        If we can't find any useful calling source, default to False (i.e.
-        allow autorun) to preserve backwards-compatibility.
-        """
-        try:
-            import inspect
-            for frame_info in inspect.stack():
-                ctx = frame_info.code_context
-                joined = None
-                if ctx:
-                    joined = ''.join(ctx).strip()
-                else:
-                    # attempt to read the source file line if code_context is missing
-                    try:
-                        fn = frame_info.filename
-                        ln = frame_info.lineno
-                        if fn and fn != '<string>' and fn != '<stdin>' and os.path.exists(fn):
-                            with open(fn, 'r') as _f:
-                                lines = _f.readlines()
-                                if 0 < ln <= len(lines):
-                                    joined = lines[ln-1].strip()
-                    except Exception:
-                        joined = None
+class FupiLimitError(RuntimeError):
+    """Raised when one fupi import would select more than FUPI_DIR_LIMIT directories."""
 
-                if not joined:
-                    continue
 
-                # look for explicit patterns
-                # Catch both `from fupi import` and `from fupi.X import` (e.g., `from fupi.fupi import`)
-                if 'from fupi' in joined and 'import' in joined:
-                    return True
-                if 'import fupi' in joined and 'from' not in joined:
-                    return False
-        except Exception:
-            # Be conservative: if stack inspection fails, allow autorun
-            return False
+def _parse(name):
+    """Return [[(kind, n), ...], ...] (one list per group) for a valid name, else None."""
+    groups = []
+    for group in name.split("_"):
+        if not _GROUP.fullmatch(group):
+            return None
+        steps = [(k, int(n) if n else None) for k, n in re.findall(r"(up|down)(\d*)", group)]
+        if any(n == 0 for _, n in steps):
+            return None
+        groups.append(steps)
+    return groups
 
-        # no clear evidence of a `from`-style import
-        return False
 
-    # if `from fupi import ManualFupi` style detected, skip autorun:
-    was__FROM__import = _import_was__from__style()
-    if not was__FROM__import:
-        try:
-            AutoFupi = ManualFupi(autorun=True)
-            shortest_path = AutoFupi.shortest_path()
+def _user_frame():
+    """Return (first frame outside fupi/importlib, its warnings stacklevel relative to our caller)."""
+    frame, level = inspect.currentframe().f_back, 1
+    while frame and frame.f_code.co_filename.startswith(_INTERNAL):
+        frame = frame.f_back
+        if frame and "_bootstrap" not in frame.f_code.co_filename:  # warnings skips those itself
+            level += 1
+    return frame, level
 
-            pass # module exits after this point, in normal operations
-        except Exception as e:
-            import traceback, sys as _sys
-            print(f"Error importing or running fupi: {e}", file=_sys.stderr)
-            traceback.print_exc()
 
-except Exception as e:
-    import traceback, sys as _sys
-    print(f"Error importing fupi package: {e}", file=_sys.stderr)
-    traceback.print_exc()
+def _limit():
+    raw = os.environ.get("FUPI_DIR_LIMIT", "1000")
+    if not raw.strip().isdigit() or int(raw) < 1:
+        raise ValueError(f"FUPI_DIR_LIMIT must be an integer >= 1, got {raw!r}")
+    return int(raw)
+
+
+def _subdirs(directory, skip):
+    names = next(os.walk(directory), (None, [], None))[1]
+    return [(directory / n).resolve() for n in sorted(names) if not any(re.fullmatch(p, n) for p in skip)]
+
+
+def _apply(name, shortcut):
+    """Select folders for `name` from the importing file's directory, then append them to sys.path."""
+    global _bare_added
+    frame, level = _user_frame()
+    file = frame.f_globals.get("__file__") if frame else None
+    file = file if file and os.path.isfile(file) else None  # e.g. `python -` sets __file__ = '<stdin>'
+    anchor = Path(file).resolve().parent if file else Path.cwd().resolve()
+    if not shortcut:  # bare default: whole subtree from a file, but only one level from a REPL/notebook CWD
+        name = "down_up1" if file else "up1_down1"
+    limit, skip = _limit(), skip_dir_patterns
+    skip = [skip] if isinstance(skip, str) else list(skip)
+    selected, mod = {anchor}, f"fupi.{name}" if shortcut else "fupi"
+
+    def add(path):
+        found.add(path)
+        if path not in selected:
+            selected.add(path)
+            new.add(path)
+            if len(selected) > limit:
+                raise FupiLimitError(
+                    f"'import {mod}' (anchor {anchor}) selected more than the limit of {limit} folders.\n"
+                    "This is a problem: a huge sys.path slows every import, makes module-name collisions "
+                    "and wrong-module imports likely, and usually means the name is broader than intended.\n"
+                    "To fix: narrow the name (for example 'down2' instead of 'down'), or raise the limit by "
+                    "setting FUPI_DIR_LIMIT (for example FUPI_DIR_LIMIT=5000) before importing fupi.")
+
+    for group in _parse(name):
+        ends = [anchor]  # every group starts fresh at the anchor
+        for kind, n in group:
+            found, new, next_ends = set(), set(), []
+            if kind == "up":
+                for path in ends:
+                    for _ in range(n):
+                        if path.parent == path.parent.parent:  # never add the filesystem root
+                            break
+                        path = path.parent
+                        add(path)
+                    next_ends.append(path)
+            else:
+                level_dirs, depth = ends, 0
+                while level_dirs and (n is None or depth < n):
+                    deeper = []
+                    for d in level_dirs:
+                        for child in _subdirs(d, skip):
+                            if child not in found:
+                                add(child)
+                                deeper.append(child)
+                    level_dirs, depth = deeper, depth + 1
+                    next_ends = deeper or next_ends
+            if found and not new:
+                step = f"{kind}{n or ''}"
+                warnings.warn(f"fupi: step '{step}' in '{name}' selected no new folders", UserWarning,
+                              stacklevel=level)
+            ends = list(dict.fromkeys(next_ends)) if found else ends
+
+    if shortcut:  # a shortcut replaces the bare `import fupi` default rather than adding to it
+        for p in _bare_added:
+            if p in sys.path:
+                sys.path.remove(p)
+            if p in paths_added:
+                paths_added.remove(p)
+        _bare_added = []
+    added = [p for p in sorted(map(str, selected)) if p not in sys.path]
+    sys.path.extend(added)
+    paths_added.extend(added)
+    return added
+
+
+class _ShortcutFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    """Serves `fupi.<name>` for any name matching the shortcut grammar."""
+
+    def find_spec(self, fullname, path=None, target=None):
+        pkg, _, name = fullname.partition(".")
+        if pkg == __name__ and name and "." not in name and _parse(name):
+            return importlib.util.spec_from_loader(fullname, self)
+        return None
+
+    def exec_module(self, module):
+        module.paths_added = _apply(module.__name__.partition(".")[2], shortcut=True)
+
+
+_bare_added = _apply(None, shortcut=False)
+if not any(type(f).__name__ == "_ShortcutFinder" for f in sys.meta_path):
+    sys.meta_path.append(_ShortcutFinder())
