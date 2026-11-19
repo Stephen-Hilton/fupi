@@ -12,7 +12,7 @@ import sys
 import warnings
 from pathlib import Path
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 __all__ = ["refresh", "paths_added", "skip_dir_patterns", "FUPI_DEFAULT_SKIP_DIR_PATTERNS", "FupiLimitError"]
 
 FUPI_DEFAULT_SKIP_DIR_PATTERNS = (r"\..*", r"_.*", r"venv.*", r"env", r".*\.egg-info",
