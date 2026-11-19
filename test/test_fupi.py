@@ -112,7 +112,7 @@ def test_up100_stops_below_root(tree):
 
 
 # 4a: traversal equivalences
-@pytest.mark.parametrize("a, b", [("down2up1", "down2"), ("down2up3", "down2_up1"), ("down_up1", "")])
+@pytest.mark.parametrize("a, b", [("up", "up100"), ("updown1", "up100down1"), ("down2up1", "down2"), ("down2up3", "down2_up1"), ("down_up1", "")])
 def test_equivalences(tree, a, b):
     rhs = f"import fupi.{b}" if b else "import fupi"
     assert selected(tree["A"], f"import fupi.{a}") == selected(tree["A"], rhs)
@@ -223,7 +223,7 @@ def test_two_shortcuts_accumulate(tree):
 
 
 # 6: invalid names
-@pytest.mark.parametrize("name", ["up0", "down0", "up", "sideways", "up1__down", "_up1", "up1_", "updown1"])
+@pytest.mark.parametrize("name", ["up0", "down0", "upp1", "sideways", "up1__down", "_up1", "up1_", "up1down0"])
 def test_invalid_names(tree, name):
     body = f"import importlib\ntry:\n    importlib.import_module('fupi.{name}')\nexcept ModuleNotFoundError:\n" \
            "    print('MNF', file=sys.stderr)"
@@ -305,3 +305,54 @@ def test_symlinked_script_resolves(tree, tmp_path):
     env = {**os.environ, "PYTHONPATH": str(SRC)}
     proc = subprocess.run([sys.executable, str(link_dir / "link.py")], env=env, capture_output=True, text=True)
     assert tree["c1"] in proc.stdout and tree["P"] in proc.stdout
+
+
+# fupi.refresh(): re-run every fupi import with the current skip patterns
+def test_refresh_after_append_removes_newly_skipped(tree):
+    out, _ = run(tree["A"], "import fupi\nfupi.skip_dir_patterns.append('c1')\nfupi.refresh()")
+    assert set(out["new"]) == {tree["c2"], tree["P"]} and out["paths_added"] == out["new"]
+
+
+def test_refresh_after_removing_a_pattern_adds_folders_back(tree):
+    body = "import fupi\nfupi.skip_dir_patterns.remove(r'\\..*')\nfupi.refresh()"
+    out, _ = run(tree["A"], body)
+    assert tree["git"] in out["new"] and str(Path(tree["git"]) / "h") in out["new"]
+
+
+def test_refresh_reset_to_default(tree):
+    body = "import fupi\nfupi.skip_dir_patterns = 'c.*'\nfupi.refresh()\n" \
+           "fupi.skip_dir_patterns = fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS\nfupi.refresh()"
+    assert selected(tree["A"], body) == selected(tree["A"], "import fupi")
+
+
+def test_refresh_reruns_every_shortcut(tree):
+    body = "import fupi.up1down2\nimport fupi.up2\nfupi.skip_dir_patterns.append('S')\nfupi.refresh()"
+    assert selected(tree["A"], body) == S(tree, "P", "G", "c1", "c2")
+
+
+def test_shortcut_after_refresh_still_replaces_bare_run(tree):
+    body = "import fupi\nfupi.skip_dir_patterns.remove(r'\\..*')\nfupi.refresh()\nimport fupi.up1"
+    out, _ = run(tree["A"], body)  # refresh added .git; the shortcut must remove it too
+    assert out["new"] == [tree["P"]] and out["paths_added"] == [tree["P"]]
+
+
+def test_refresh_does_not_repeat_warnings(tree):
+    out, _ = run(tree["A"], "import fupi.down2up1\nimport fupi\nfupi.refresh()")
+    assert len(out["warnings"]) == 1
+
+
+def test_refresh_over_limit_leaves_sys_path_unchanged(small):
+    (small / "_h1").mkdir()
+    (small / "_h2").mkdir()
+    body = """
+    import fupi
+    snapshot = list(sys.path)
+    fupi.skip_dir_patterns = []
+    try:
+        fupi.refresh()
+    except fupi.FupiLimitError:
+        print("LIMIT", file=sys.stderr)
+    assert sys.path == snapshot
+    """
+    _, proc = run(small, body, env={"FUPI_DIR_LIMIT": "3"})
+    assert "LIMIT" in proc.stderr

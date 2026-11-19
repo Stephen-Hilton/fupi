@@ -30,12 +30,12 @@
  
 Shortcuts are submodules: `import fupi.up1`, `import fupi.up2down2_up3`, and so on.
  
-**Grammar:** a name is one or more *groups* joined by `_`, with no limit on the number of groups (`up2down1_up4down1_up6down1` is valid; only the `FUPI_DIR_LIMIT` path limit applies). A group is one or more *steps* concatenated with no separator, in any order, and a step is `up<N>` or `down[<K>]`. Parse by splitting on `_`, applying `re.fullmatch(r"(?:up\d+|down\d*)+", group)` to each group, and tokenising it with `re.findall(r"(up|down)(\d*)", group)`. `N` and `K` must be >= 1 when given, so `up0`, `down0` and a bare `up` are invalid. Examples: `up1`, `down`, `down1`, `up1down2`, `down2up1`, `up1down2_up3`, `down2_up1`.
+**Grammar:** a name is one or more *groups* joined by `_`, with no limit on the number of groups (`up2down1_up4down1_up6down1` is valid; only the `FUPI_DIR_LIMIT` path limit applies). A group is one or more *steps* concatenated with no separator, in any order, and a step is `up[<N>]` or `down[<K>]`. Parse by splitting on `_`, applying `re.fullmatch(r"(?:up\d*|down\d*)+", group)` to each group, and tokenising it with `re.findall(r"(up|down)(\d*)", group)`. `N` and `K` must be >= 1 when given, so `up0` and `down0` are invalid. With no number, `up` climbs every ancestor (stopping below the filesystem root) and `down` descends the whole tree. Examples: `up`, `up1`, `down`, `down1`, `up1down2`, `down2up1`, `up1down2_up3`, `down2_up1`.
  
 **Semantics: a traversal.** `up` and `down` are symmetric steps. Each step walks folders from where the previous step ended, adding every folder it passes to `sys.path`, until it hits its limit (N levels up, K levels down).
 - Each group starts fresh at the anchor. The anchor is always selected. The result is the union of all groups, and group order does not change it.
 - Inside a group, steps run left to right. Each step starts from the previous step's *endpoints* (initially just the anchor):
-  - `upN` adds every ancestor of each endpoint, from the parent up to the Nth ancestor (the directories themselves only, not their other children). Its new endpoints are the Nth ancestors. **Running out is not an error:** if fewer than N ancestors exist, it adds what exists and stops (`up100` is fine) with no error and no warning. Never add the filesystem root itself (`/` or a drive root), because that would make every top-level folder importable. If a step finds nothing at all, its endpoints stay unchanged so later steps continue from where it was.
+  - `upN` (unlimited with no number) adds every ancestor of each endpoint, from the parent up to the Nth ancestor (the directories themselves only, not their other children). Its new endpoints are the Nth ancestors. **Running out is not an error:** if fewer than N ancestors exist, it adds what exists and stops (`up100` is fine) with no error and no warning. Never add the filesystem root itself (`/` or a drive root), because that would make every top-level folder importable. If a step finds nothing at all, its endpoints stay unchanged so later steps continue from where it was.
   - `downK` adds descendants of each endpoint, level by level, to depth K (unlimited with no number), skipping directories that match the skip patterns. Its new endpoints are the directories at the deepest level it reached. **Running out is not an error:** if the tree is shallower than K, it adds what exists and stops (`down100` is fine) with no error and no warning. If it finds nothing at all (no subdirectories), its endpoints stay unchanged.
 - Worked examples (anchor `A`, parent `P`, grandparent `G`):
   - `up1down2`: add `P`, then all of `P`'s children (`A` and its siblings), then all of their children. `A`'s own subtree is included to that depth.
@@ -78,7 +78,7 @@ Shortcuts are submodules: `import fupi.up1`, `import fupi.up2down2_up3`, and so 
 - Match with `re.fullmatch` against each directory name (not full paths and never ancestors above the anchor). This changes the old prefix-match behavior, so call it out in the README.
 - Prune skipped directories during the walk (`os.walk` with in-place `dirnames` filtering) so `.git`, `node_modules` and the like are never descended into.
 - Directories that are chosen explicitly (the anchor, the parent, an ancestor) are never skip-tested.
-- Known limitation to document: an in-code override of `skip_dir_patterns` only affects shortcut imports that run afterward, because the bare run happens during `import fupi`. The env var affects everything.
+- **`fupi.refresh()`**: changing `skip_dir_patterns` has no effect by itself (no property magic). `refresh()` re-runs every recorded fupi run (the bare run unless a shortcut replaced it, plus each shortcut, each with its own name and anchor) using the current patterns, then replaces all of `fupi.paths_added` on `sys.path` with the new union. It re-runs rather than filters, so removing a pattern brings folders back. It enforces `FUPI_DIR_LIMIT` per run and raises before modifying `sys.path`, emits no redundancy warnings, and keeps the bare-run tracking current, so a later shortcut still replaces the bare paths. Shortcut imports after a change use the new patterns without a refresh.
 
 
 ## Removed in 2.0.0
@@ -98,20 +98,21 @@ Use tmp directory trees, and run scripts via `subprocess` from **different worki
 1. Bare import: the anchor, its subdirectories and the parent are added, and the parent's siblings are not.
 2. The same result when the script is run from a different CWD.
 3. Ancestor names such as `old_work` or `src` above the anchor do not affect results.
-4. Each step and group form (`up1`, `up2` including that the parent is added too, `down`, `down1`, `up1down2`, `down2up1`, `down2up3`, `up2down1`), plus `down100` and `up100` (no error, no warning, and the filesystem root is never added).
+4. Each step and group form (`up1`, `up2` including that the parent is added too, `down`, `down1`, `up1down2`, `down2up1`, `down2up3`, `up2down1`), plus `down100`, `up100` and bare `up` (`up` selects the same set as `up100`; no error, no warning, and the filesystem root is never added).
    4a. Traversal semantics: `up1down2` selects `P`, its children and their children; `down2up1` selects exactly the same folders as `down2` (the anchor, children and grandchildren); `down2up3` selects the same set as `down2_up1`; and `down_up1` selects the same set as bare `import fupi` from a file.
    4b. Multi-group names are unioned from a fresh anchor per group (`down2_up1`, `up1down2_up3`, and a three-group name such as `up2down1_up4down1_up6down1`; there is no cap on group count). Group order does not change the result, and overlaps produce no duplicate `sys.path` entries.
    4c. Warnings (use `pytest.warns` / `warnings.catch_warnings`): `down2up1` warns, `down2up3` does not, `up1down2` does not, and re-importing the same shortcut does not warn.
    4d. Sanity limit: with `FUPI_DIR_LIMIT` set small (for example 5) on a tmp tree, an over-limit name raises `FupiLimitError`; the message mentions what happened, why it is bad, and `FUPI_DIR_LIMIT`; `sys.path` is unchanged after the failure; raising the variable lets the same name succeed; the default is 1000 when unset; a non-integer or `0` value raises `ValueError`.
    4e. A step that finds nothing (`down1` in a leaf folder) is silent and later steps still run from the unchanged endpoints (`down1up1` in a leaf folder adds the parent).
 5. A shortcut replaces the bare-run paths, and importing it twice causes no duplicates.
-6. Invalid names (`up0`, `down0`, `up`, `sideways`, `up1__down`, `_up1`, `up1_`) raise `ModuleNotFoundError`.
+6. Invalid names (`up0`, `down0`, `upp1`, `sideways`, `up1__down`, `_up1`, `up1_`) raise `ModuleNotFoundError`.
 7. Skip patterns: defaults, string assignment, tuple/set assignment, the reset-to-default idiom, env append, and `fullmatch` semantics.
+   7a. `refresh()`: `.append()` removes newly skipped folders, removing a pattern adds folders back, reset round-trips to the bare result, every shortcut is re-run, a shortcut after a refresh still replaces the bare paths, no repeated warnings, and an over-limit refresh leaves `sys.path` unchanged.
 8. The REPL/no-`__file__` fallback: bare `import fupi` selects `up1_down1` from the CWD (also from `/` and `~` without hitting the limit), and `import fupi.up1_down` restores the full subtree.
 Run the tests in subprocesses or isolate `sys.path`, so the old test-order dependence cannot return.
  
 ## Open questions (proposed defaults in parentheses)
  
-- Whether to keep a tiny explicit function such as `fupi.add(...)` (no; out of scope for 2.0).
+- Whether to keep a tiny explicit function such as `fupi.add(...)` (no; out of scope for 2.0). `fupi.refresh()` is the one public function.
 - Whether anchoring at a symlinked script resolves to the real path (yes).
  

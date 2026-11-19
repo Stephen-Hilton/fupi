@@ -56,6 +56,7 @@ A name is made of **steps**. `upN` climbs N levels and `down`/`downK` descends K
 |---|---|
 | `up1` | P |
 | `up2` | P, G |
+| `up` | every ancestor of A, stopping below the filesystem root |
 | `down` | every subdirectory of A, at any depth |
 | `down1` | A's children |
 | `up1down2` | P, P's children (A and its siblings), and their children |
@@ -66,7 +67,7 @@ A name is made of **steps**. `upN` climbs N levels and `down`/`downK` descends K
 | `up1_down1` | what bare `import fupi` does with no file (REPL, notebook) |
 
 Rules:
-- `N` and `K` must be at least 1. Invalid names (`up0`, `up`, `up1__down`, ...) raise `ModuleNotFoundError`.
+- Numbers are optional for both steps: bare `up` climbs every ancestor (stopping below the filesystem root), and bare `down` descends the whole tree. A number given must be at least 1. Invalid names (`up0`, `down0`, `up1__down`, ...) raise `ModuleNotFoundError`.
 - Running out of folders is fine: `up100` stops below the filesystem root (which is never added), and `down100` stops at the bottom of the tree.
 - A step that finds folders but none of them are new emits a `UserWarning`, because the name can be simplified. For example, `down2up1` climbs back onto folders `down2` already added.
 
@@ -93,14 +94,20 @@ fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS
   ```bash
   FUPI_SKIP_DIR_PATTERNS="build, dist, doc.*"
   ```
-- **Override in code** by assigning a list, tuple, set, or single string. This replaces everything, including the defaults:
+- **Change them in code**, then call `fupi.refresh()`. Changing the patterns does nothing by itself. `refresh()` re-runs every fupi import so far (the bare one and any shortcuts) with the current patterns, replacing the paths fupi added. That works in both directions: newly skipped folders are removed, and folders you stop skipping come back.
   ```python
   import fupi
-  fupi.skip_dir_patterns = ["build", "dist"]
-  import fupi.up1down2          # uses the new patterns
-  fupi.skip_dir_patterns = fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS   # reset
+  fupi.skip_dir_patterns.append("build")       # add to the defaults
+  fupi.refresh()
   ```
-  Limitation: the bare run happens during `import fupi`, so an in-code override only affects shortcut imports that run afterward. The env var affects everything.
+  You can also assign a list, tuple, set or single string, which replaces everything, including the defaults:
+  ```python
+  fupi.skip_dir_patterns = ["build", "dist"]   # .git, venv, ... are no longer skipped
+  fupi.refresh()
+  fupi.skip_dir_patterns = fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS   # reset
+  fupi.refresh()
+  ```
+  Shortcut imports that run after a change use the new patterns automatically; no `refresh()` needed.
 
 ## Migrating from 1.x
 
@@ -108,7 +115,7 @@ fupi.FUPI_DEFAULT_SKIP_DIR_PATTERNS
 |---|---|
 | Scanned from the CWD for `src`, `app`, `main`, `test`, `tests`, `mcp` | Anchors at the importing file; adds it, its subtree and its parent |
 | `FUPI_ADD_DIR_NAMES` | Removed. Use a shortcut such as `import fupi.up1down2` |
-| `ManualFupi(...)`, `from fupi import ManualFupi` | Removed. Use shortcuts and `fupi.skip_dir_patterns` |
+| `ManualFupi(...)`, `from fupi import ManualFupi` | Removed. Use shortcuts, `fupi.skip_dir_patterns` and `fupi.refresh()` |
 | `shortest_path`, `sys_path_history`, rollback | Removed |
 | Skip patterns prefix-matched (`re.match`) | Skip patterns must fully match the folder name (`re.fullmatch`) |
 | Paths could be inserted anywhere | Always appended, sorted, deduplicated |
